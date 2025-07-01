@@ -12,7 +12,7 @@ ibicus
 imageio-ffmpeg
 matplotlib
 motuclient
-netcdf4<1.6.1
+netcdf4
 pandas
 plotly
 pip
