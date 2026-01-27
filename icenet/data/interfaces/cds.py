@@ -45,7 +45,7 @@ class ERA5Downloader(ClimateDownloader):
                  *args,
                  identifier: str = "era5",
                  cdi_map: object = CDI_MAP,
-                 show_progress: bool = False,
+                 show_progress: bool = True,
                  **kwargs):
         super().__init__(*args,
                          drop_vars=["lambert_azimuthal_equal_area"],
@@ -149,8 +149,11 @@ class ERA5Downloader(ClimateDownloader):
                                  There should only be one variable.
                                  {var_list}"""
                             )
-        nom = var_list[0]
-        da = getattr(ds.rename({"valid_time": "time", nom: var}), var)
+        # Rename variables to standard names if needed
+        variable_map = {var_list[0]: var}
+        if "valid_time" in ds.dims:
+            variable_map["valid_time"] = "time"
+        da = getattr(ds.rename(variable_map), var)
 
         # This data downloader handles different pressure_levels in independent
         # files rather than storing them all in separate dimension of one array/file.
