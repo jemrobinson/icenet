@@ -129,10 +129,10 @@ class ERA5Downloader(ClimateDownloader):
         :param var:
         :param download_path:
         """
+        temp_path = "{}.bak{}".format(*os.path.splitext(download_path))
         try:
             logging.info("Postprocessing CDS API data at {}".format(download_path))
 
-            temp_path = "{}.bak{}".format(*os.path.splitext(download_path))
             logging.debug("Moving to {}".format(temp_path))
             os.rename(download_path, temp_path)
 
@@ -212,8 +212,9 @@ class ERA5Downloader(ClimateDownloader):
             da = da.sortby("time").resample(time='1D').mean()
             da.to_netcdf(download_path)
         except Exception as e:
-            logging.exception("Postprocessing failed for {}.".format(download_path))
-            raise RuntimeError(e)
+            invalid_path = f"{temp_path}.invalid"
+            os.rename(temp_path, invalid_path)
+            logging.exception("Postprocessing failed for {}. Moving to {}.".format(download_path, invalid_path))
 
     def additional_regrid_processing(self, datafile: str, cube_ease: object):
         """
