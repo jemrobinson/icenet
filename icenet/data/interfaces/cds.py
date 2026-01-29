@@ -129,87 +129,91 @@ class ERA5Downloader(ClimateDownloader):
         :param var:
         :param download_path:
         """
-        logging.info("Postprocessing CDS API data at {}".format(download_path))
+        try:
+            logging.info("Postprocessing CDS API data at {}".format(download_path))
 
-        temp_path = "{}.bak{}".format(*os.path.splitext(download_path))
-        logging.debug("Moving to {}".format(temp_path))
-        os.rename(download_path, temp_path)
+            temp_path = "{}.bak{}".format(*os.path.splitext(download_path))
+            logging.debug("Moving to {}".format(temp_path))
+            os.rename(download_path, temp_path)
 
-        ds = xr.open_dataset(temp_path)
+            ds = xr.open_dataset(temp_path)
 
-        # New CDSAPI file holds more data_vars than just variable.
-        # Omit them when figuring out default CDS variable name.
-        omit_vars = set(["number", "expver"])
-        data_vars = set(ds.data_vars)
-        var_list = list(data_vars.difference(omit_vars))
-        if not var_list:
-            raise ValueError(f"No variables found in file")
-        elif len(var_list) > 1:
-            raise ValueError(f"""Multiple variables found in data file!
-                                 There should only be one variable.
-                                 {var_list}"""
-                            )
-        # Rename variables to standard names if needed
-        variable_map = {var_list[0]: var}
-        if "valid_time" in ds.dims:
-            variable_map["valid_time"] = "time"
-        da = getattr(ds.rename(variable_map), var)
+            # New CDSAPI file holds more data_vars than just variable.
+            # Omit them when figuring out default CDS variable name.
+            omit_vars = set(["number", "expver"])
+            data_vars = set(ds.data_vars)
+            var_list = list(data_vars.difference(omit_vars))
+            if not var_list:
+                raise ValueError(f"No variables found in file")
+            elif len(var_list) > 1:
+                raise ValueError(f"""Multiple variables found in data file!
+                                    There should only be one variable.
+                                    {var_list}"""
+                                )
+            # Rename variables to standard names if needed
+            variable_map = {var_list[0]: var}
+            if "valid_time" in ds.dims:
+                variable_map["valid_time"] = "time"
+            da = getattr(ds.rename(variable_map), var)
 
-        # This data downloader handles different pressure_levels in independent
-        # files rather than storing them all in separate dimension of one array/file.
-        if "pressure_level" in da.dims:
-            da = da.squeeze(dim="pressure_level").drop_vars("pressure_level")
-        if "number" in da.coords:
-            da = da.drop_vars("number")
+            # This data downloader handles different pressure_levels in independent
+            # files rather than storing them all in separate dimension of one array/file.
+            if "pressure_level" in da.dims:
+                da = da.squeeze(dim="pressure_level").drop_vars("pressure_level")
+            if "number" in da.coords:
+                da = da.drop_vars("number")
 
-        # Removing some coord attribute definition
-        if "coordinates" in da.attrs:
-            omit_attrs = ["number", "expver", "isobaricInhPa"]
-            attributes = da.attrs["coordinates"].replace("valid_time", "time").split()
-            attributes = [attr for attr in attributes if attr not in omit_attrs]
-            da.attrs["coordinates"] = " ".join(attributes)
+            # Removing some coord attribute definition
+            if "coordinates" in da.attrs:
+                omit_attrs = ["number", "expver", "isobaricInhPa"]
+                attributes = da.attrs["coordinates"].replace("valid_time", "time").split()
+                attributes = [attr for attr in attributes if attr not in omit_attrs]
+                da.attrs["coordinates"] = " ".join(attributes)
 
-        doy_counts = da.time.groupby("time.dayofyear").count()
+            doy_counts = da.time.groupby("time.dayofyear").count()
 
-        # There are situations where the API will spit out unordered and
-        # partial data, so we ensure here means come from full days and don't
-        # leave gaps. If we can avoid expver with this, might as well, so
-        # that's second
-        # FIXME: This will cause issues for already processed latlon data
-        if len(doy_counts[doy_counts < 24]) > 0:
-            # Edge case, where if first day of the month is the only day available, and
-            # partially so.
-            # e.g. 2025-01-01, with 00:00, 01:00 and 02:00 available, so, only 3 hours
-            # available, not 24 hours to create a daily average.
-            # This will only occur if trying to donwload on the 6th of a month due to 5 day
-            # lag in ERA5 data availability (available data = present day - 5).
-            if len(doy_counts) == 1:
-                # In this case, nothing to download/postprocess.
-                return
-            strip_dates_before = min([
-                dt.datetime.strptime(
-                    "{}-{}".format(d,
-                                   pd.to_datetime(da.time.values[0]).year),
-                    "%j-%Y")
-                for d in doy_counts[doy_counts < 24].dayofyear.values
-            ])
-            da = da.where(da.time < pd.Timestamp(strip_dates_before), drop=True)
+            # There are situations where the API will spit out unordered and
+            # partial data, so we ensure here means come from full days and don't
+            # leave gaps. If we can avoid expver with this, might as well, so
+            # that's second
+            # FIXME: This will cause issues for already processed latlon data
+            if len(doy_counts[doy_counts < 24]) > 0:
+                # Edge case, where if first day of the month is the only day available, and
+                # partially so.
+                # e.g. 2025-01-01, with 00:00, 01:00 and 02:00 available, so, only 3 hours
+                # available, not 24 hours to create a daily average.
+                # This will only occur if trying to donwload on the 6th of a month due to 5 day
+                # lag in ERA5 data availability (available data = present day - 5).
+                if len(doy_counts) == 1:
+                    # In this case, nothing to download/postprocess.
+                    return
+                strip_dates_before = min([
+                    dt.datetime.strptime(
+                        "{}-{}".format(d,
+                                    pd.to_datetime(da.time.values[0]).year),
+                        "%j-%Y")
+                    for d in doy_counts[doy_counts < 24].dayofyear.values
+                ])
+                da = da.where(da.time < pd.Timestamp(strip_dates_before), drop=True)
 
-        # Bryn Note:
-        # expver = 1: ERA5
-        # expver = 5: ERA5T
-        # The latest 3 months of data is ERA5T and may be subject to changes.
-        # Data prior to this is from ERA5.
-        # The new CDSAPI returns combined data when `reanalysis` is requested.
-        if 'expver' in da.coords:
-            logging.warning("expver in coordinates, new cdsapi returns ERA5 and "
-                            "ERA5T combined, this needs further work: expver needs "
-                            "storing for later overwriting")
-            ## Ref: https://confluence.ecmwf.int/pages/viewpage.action?pageId=173385064
-            #da = da.sel(expver=1).combine_first(da.sel(expver=5))
+            # Bryn Note:
+            # expver = 1: ERA5
+            # expver = 5: ERA5T
+            # The latest 3 months of data is ERA5T and may be subject to changes.
+            # Data prior to this is from ERA5.
+            # The new CDSAPI returns combined data when `reanalysis` is requested.
+            if 'expver' in da.coords:
+                logging.warning("expver in coordinates, new cdsapi returns ERA5 and "
+                                "ERA5T combined, this needs further work: expver needs "
+                                "storing for later overwriting")
+                ## Ref: https://confluence.ecmwf.int/pages/viewpage.action?pageId=173385064
+                #da = da.sel(expver=1).combine_first(da.sel(expver=5))
 
-        da = da.sortby("time").resample(time='1D').mean()
-        da.to_netcdf(download_path)
+            da = da.sortby("time").resample(time='1D').mean()
+            da.to_netcdf(download_path)
+        except Exception as e:
+            logging.exception("Postprocessing failed for {}.".format(download_path))
+            raise RuntimeError(e)
 
     def additional_regrid_processing(self, datafile: str, cube_ease: object):
         """
