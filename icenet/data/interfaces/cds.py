@@ -73,6 +73,9 @@ class ERA5Downloader(ClimateDownloader):
         :param req_dates: the request date
         :param download_path:
         """
+        if os.path.exists(download_path):
+            logging.info("File already exists, skipping download: {}".format(download_path))
+            return
 
         logging.debug("Processing {} dates".format(len(req_dates)))
         var_prefix = var[0:-(len(str(level)))] if level else var
