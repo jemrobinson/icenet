@@ -298,7 +298,7 @@ class ClimateDownloader(Downloader):
                 logging.info(
                     "Skipping actual download to {}".format(latlon_path))
         else:
-            logging.info("No requested dates remain, likely already present")
+            logging.info("No requested dates remain for {} @ {}, likely already present".format(var_prefix, level))
 
         if self._postprocess and os.path.exists(latlon_path):
             self.postprocess(var, latlon_path)
