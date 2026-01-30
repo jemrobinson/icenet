@@ -522,8 +522,9 @@ class ClimateDownloader(Downloader):
             logging.info("{} files for {}".format(len(wind_files[var]), var))
 
         # NOTE: we're relying on apply_to having equal datasets
-        assert len(wind_files[apply_to[0]]) == len(wind_files[apply_to[1]]), \
-            "The wind file datasets are unequal in length"
+        if len(wind_files[apply_to[0]]) != len(wind_files[apply_to[1]]):
+            logging.warning("The wind file datasets are unequal in length so we cannot apply rotation")
+            return
 
         # validation
         for idx, wind_file_0 in enumerate(wind_files[apply_to[0]]):
