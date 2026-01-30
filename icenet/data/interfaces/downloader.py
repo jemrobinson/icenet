@@ -68,7 +68,9 @@ def filter_dates_on_data(latlon_path: str,
             logging.debug("{} latlon dates already available in {}".format(
                 len(latlon_dates), latlon_path))
         except ValueError:
-            logging.warning("Latlon {} dates not readable, ignoring file")
+            logging.warning("Latlon dates not readable, ignoring file {}".format(latlon_path))
+        except AttributeError:
+            logging.warning("Latlon dates may be incorrectly encoded, ignoring file {}".format(latlon_path))
 
     if check_regridded and os.path.exists(regridded_name):
         regridded_dates = xr.open_dataset(regridded_name,
@@ -254,9 +256,9 @@ class ClimateDownloader(Downloader):
             self.get_req_filenames(var_folder, req_dates[0])
 
         req_dates = filter_dates_on_data(latlon_path,
-                                         regridded_name,
-                                         req_dates,
-                                         drop_vars=self._drop_vars)
+                                        regridded_name,
+                                        req_dates,
+                                        drop_vars=self._drop_vars)
 
         if len(req_dates):
             if self._download:
