@@ -197,7 +197,10 @@ class ERA5Downloader(ClimateDownloader):
                         "%j-%Y")
                     for d in doy_counts[doy_counts < 24].dayofyear.values
                 ])
-                da = da.where(da.time < pd.Timestamp(strip_dates_before), drop=True)
+                try:
+                    da = da.where(da.time < pd.Timestamp(strip_dates_before), drop=True)
+                except IndexError:
+                    logging.warning("Skipping postprocessing of unordered days in {}".format(download_path))
 
             # Bryn Note:
             # expver = 1: ERA5
