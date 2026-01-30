@@ -64,13 +64,13 @@ def filter_dates_on_data(latlon_path: str,
     if check_latlon and os.path.exists(latlon_path):
         try:
             ds = xr.open_dataset(latlon_path, drop_variables=drop_vars)
-            latlon_dates = ds.time.values
-            logging.debug("{} latlon dates already available in {}".format(
-                len(latlon_dates), latlon_path))
+            time_dimension = [k for k in ds.dims.keys() if "time" in k]
+            if time_dimension:
+                latlon_dates = ds[time_dimension[0]].values
+                logging.debug("{} latlon dates already available in {}".format(
+                    len(latlon_dates), latlon_path))
         except ValueError:
             logging.warning("Latlon dates not readable, ignoring file {}".format(latlon_path))
-        except AttributeError:
-            logging.warning("'time' attribute may be missing in file {}. Found {}.".format(latlon_path, ds.dims))
 
     if check_regridded and os.path.exists(regridded_name):
         regridded_dates = xr.open_dataset(regridded_name,
